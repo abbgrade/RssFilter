@@ -2,12 +2,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Attach to PowerShell Functions",
-            "type": "PowerShell",
+            "name": "Attach to .NET Functions",
+            "type": "coreclr",
             "request": "attach",
-            "customPipeName": "AzureFunctionsPSWorker",
-            "runspaceId": 1,
-            "preLaunchTask": "func: host start"
+            "processId": "${command:azureFunctions.pickProcess}"
         }
     ]
 }
