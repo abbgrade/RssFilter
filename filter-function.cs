@@ -34,8 +34,7 @@ namespace RssFilter.Function
                 if ( connectionString == null )
                     throw new Exception("StorageConnectionString is unconfigured");
 
-                var serviceClient = new BlobServiceClient(connectionString);
-                containerClient = serviceClient.GetBlobContainerClient("filter");
+                containerClient = new BlobContainerClient(connectionString, "filter");
             }
 
             // parse body
@@ -56,6 +55,15 @@ namespace RssFilter.Function
             // parse filter definition
             {
                 var blobClient = containerClient.GetBlobClient(fileName);
+                try
+                {
+                    blobClient.GetProperties();
+                }
+                catch
+                {
+                    return new NotFoundObjectResult ($"Filter {fileName} not found");
+                }
+
                 using (var filterReader = XmlReader.Create(blobClient.Download().Value.Content))
                 {
                     var filterFile =  XDocument.Load(filterReader);
