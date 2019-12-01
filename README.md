@@ -6,9 +6,9 @@
 
 ```powershell
 Install-Module Az.Resources -Scope CurrentUser
-./Deploy.ps1
+./Deploy-AzureResources.ps1
 ```
 
 ### Github Action
 
-https://docs.microsoft.com/en-us/azure/azure-functions/functions-how-to-github-actions
+[Documentation of Function App Github Actions integration](https://docs.microsoft.com/en-us/azure/azure-functions/functions-how-to-github-actions)
