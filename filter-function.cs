@@ -27,76 +27,84 @@ namespace RssFilter.Function
         {
             log.LogInformation("C# HTTP trigger function processed a request.");
 
-            // connect blob store
-            BlobContainerClient containerClient;
+            // connect blob store with filter configurations
+            BlobContainerClient filterContainerClient;
             {
-                var connectionString = Environment.GetEnvironmentVariable("StorageConnectionString");
-                if ( connectionString == null )
-                    throw new Exception("StorageConnectionString is unconfigured");
+                var connectionString = Environment.GetEnvironmentVariable("FilterConnectionString");
+                if (connectionString == null)
+                    throw new Exception("FilterConnectionString is not configured");
 
-                containerClient = new BlobContainerClient(connectionString, "filter");
+                var container = Environment.GetEnvironmentVariable("FilterContainer");
+                if (container == null)
+                    throw new Exception("FilterContainer is not configured");
+
+                filterContainerClient = new BlobContainerClient(connectionString, container);
             }
 
-            // parse body
-            string fileName;
+            // parse request body for parameters
+            string filterFileName;
             {
                 string filterId = request.Query["filter_id"];
 
                 string requestBody = await new StreamReader(request.Body).ReadToEndAsync();
-                dynamic data = JsonConvert.DeserializeObject(requestBody);
-                filterId = filterId ?? data?.filterId;
+                dynamic requestData = JsonConvert.DeserializeObject(requestBody);
+                filterId = filterId ?? requestData?.filterId;
                 
                 if ( filterId == null )
                     return new BadRequestObjectResult("A filter_id is required");
 
-                fileName = $"{ filterId }.xml";
+                filterFileName = $"{ filterId }.xml";
             }
 
-            // parse filter definition
+            // process filter
             {
-                var blobClient = containerClient.GetBlobClient(fileName);
+                var blobClient = filterContainerClient.GetBlobClient(filterFileName);
                 try
                 {
                     blobClient.GetProperties();
                 }
                 catch
                 {
-                    return new NotFoundObjectResult ($"Filter {fileName} not found");
+                    return new NotFoundObjectResult ($"Filter {filterFileName} not found");
                 }
 
                 using (var filterReader = XmlReader.Create(blobClient.Download().Value.Content))
                 {
-                    var filterFile =  XDocument.Load(filterReader);
+                    var filterFile = XDocument.Load(filterReader);
                     var filterDefinition = filterFile.Element("filter");
                     var feedUrl = filterDefinition.Attribute("url").Value;
-
-                    WebRequest feedRequest = WebRequest.Create(feedUrl);
-                    using (WebResponse feedResponse = feedRequest.GetResponse())
-                    {
-                        log.LogInformation(((HttpWebResponse)feedResponse).StatusDescription);
-                        Stream feedStream = feedResponse.GetResponseStream();
-                        using (var feedReader = XmlReader.Create(feedStream))
-                        {
-                            var feedFile = XDocument.Load(feedReader);
-                            var feedElement = feedFile.Element(atom + "feed");
-
-                            XElement feedTitle = feedElement.Element(atom + "title");
-                            if (feedTitle == null)
-                                return new ObjectResult($"feed {feedUrl} has no title element") { StatusCode = 500};
-
-                            log.LogInformation($"{ feedTitle.Value}");
-                            foreach( var entry in feedElement.Elements(atom + "entry").Where( entry => Filter(entry, filterDefinition)).ToList() )
-                            {
-                                entry.Remove();
-                            }
-
-                            return new OkObjectResult($"{ feedFile }");
-                        }
-                    }
+                    return ReturnFilteredFeed(log, filterDefinition, feedUrl);
                 }
             }
         }
-    
+
+        private static IActionResult ReturnFilteredFeed(ILogger log, XElement filterDefinition, string feedUrl)
+        {
+            WebRequest feedRequest = WebRequest.Create(feedUrl);
+            using (WebResponse feedResponse = feedRequest.GetResponse())
+            {
+                log.LogInformation(((HttpWebResponse)feedResponse).StatusDescription);
+                Stream feedStream = feedResponse.GetResponseStream();
+                using (var feedReader = XmlReader.Create(feedStream))
+                {
+                    var feedFile = XDocument.Load(feedReader);
+                    var feedElement = feedFile.Element(atom + "feed");
+
+                    XElement feedTitle = feedElement.Element(atom + "title");
+                    if (feedTitle == null)
+                        return new ObjectResult($"feed {feedUrl} has no title element") { StatusCode = 500 };
+
+                    log.LogInformation($"{ feedTitle.Value}");
+                    foreach (var entry in feedElement.Elements(atom + "entry").Where(entry => Filter(entry, filterDefinition)).ToList())
+                    {
+                        entry.Remove();
+                    }
+
+                    return new OkObjectResult($"{ feedFile }");
+                }
+            }
+        }
+
         private static bool Filter(XElement entry, XElement definition) {
             var title = entry.Element(atom + "title");
             foreach( var rule in definition.Elements("title") )
