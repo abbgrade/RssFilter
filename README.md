@@ -1,16 +1,23 @@
 # RSS Filter
 
-This RSS filter works with your existing RSS workflow and tool.
-You can remove sponsored content or unwanted catagories by replacing the feed URL by a custom URL to your Azure Function that filters the feed on demand using a simple configuration file.
+This RSS filter works with your existing RSS app of choice.
+You can remove sponsored content or unwanted catagories by replacing the feed URL by a custom URL to your Azure Function, that filters the feed on demand using a simple configuration file.
 
 Create for every custom feed a configuration in a Azure Blob Storage Container.
 See the [example configuration](./example/heise-ticker.xml).
 
 ## Installation and Deployment
 
+The installation needs three steps.
+
+1. Setup of the Azure Resources
+2. Deployment of the Azure Function App
+3. Configuration of the RSS filter configurations
+
 ### Azure Resources
 
-The Azure resources can be created using the [ARM template](./azuredeploy.json).
+- The Azure resources can be created using the [ARM template](./azuredeploy.json)
+- Alternatively this can be done in the Azure Portal. You need a Azure Function App and a additional Azure Blob Storage Account. Application Insights is not necessary.
 
 ### Azure Function App
 
