@@ -2,6 +2,6 @@
     <title startswith="heise+ |" />
     <title startswith="TechStage |" />
     <title startswith="heise-Angebot:" />
-    <title contains="| c't uplink" />
+    <title contains="c't uplink" />
     <title contains="Was war. Was wird." />
 </filter>
