@@ -88,33 +88,76 @@ namespace RssFilter.Function
                 using (var feedReader = XmlReader.Create(feedStream))
                 {
                     var feedFile = XDocument.Load(feedReader);
-                    var feedElement = feedFile.Element(atom + "feed");
-
-                    XElement feedTitle = feedElement.Element(atom + "title");
-                    if (feedTitle == null)
-                        return new ObjectResult($"feed {feedUrl} has no title element") { StatusCode = 500 };
-
-                    log.LogInformation($"{ feedTitle.Value}");
-                    foreach (var entry in feedElement.Elements(atom + "entry").Where(entry => Filter(entry, filterDefinition)).ToList())
-                    {
-                        entry.Remove();
-                    }
-
-                    return new OkObjectResult($"{ feedFile }");
+                    var atomFeedElement = feedFile.Element(atom + "feed");
+                    var rssElement = feedFile.Element("rss");
+                    if ( atomFeedElement != null )
+                        return ReturnFilteredAtomFeed(log, filterDefinition, feedUrl, feedFile, atomFeedElement);
+                    if ( rssElement != null )
+                        return ReturnFilteredRssChannel(log, filterDefinition, feedUrl, feedFile, rssElement);
+                    throw new Exception("unsupported feed format");
                 }
             }
         }
 
-        private static bool Filter(XElement entry, XElement definition) {
+        private static IActionResult ReturnFilteredAtomFeed(ILogger log, XElement filterDefinition, string feedUrl, XDocument feedFile, XElement atomFeedElement)
+        {
+            {
+                XElement feedTitle = atomFeedElement.Element(atom + "title");
+                if (feedTitle == null)
+                    return new ObjectResult($"feed {feedUrl} has no title element") { StatusCode = 500 };
+
+                log.LogInformation($"{ feedTitle.Value}");
+            }
+
+            foreach (var entry in atomFeedElement.Elements(atom + "entry").Where(entry => FilterAtomEntry(entry, filterDefinition)).ToList())
+            {
+                entry.Remove();
+            }
+
+            return new OkObjectResult($"{ feedFile }");
+        }
+
+        private static IActionResult ReturnFilteredRssChannel(ILogger log, XElement filterDefinition, string feedUrl, XDocument feedFile, XElement rssElement)
+        {
+            XElement channel = rssElement.Element("channel");
+
+            {
+                XElement feedTitle = channel.Element("title");
+                if (feedTitle == null)
+                    return new ObjectResult($"feed {feedUrl} has no title element") { StatusCode = 500 };
+                log.LogInformation($"{ feedTitle.Value}");
+            }
+
+            foreach (var entry in channel.Elements("item").Where(entry => FilterRssItem(entry, filterDefinition)).ToList())
+            {
+                entry.Remove();
+            }
+
+            return new OkObjectResult($"{ feedFile }");
+        }
+
+        private static bool FilterAtomEntry(XElement entry, XElement filterDefinition)
+        {
             var title = entry.Element(atom + "title");
-            foreach( var rule in definition.Elements("title") )
+            return FilterTitle(filterDefinition, title.Value);
+        }
+
+        private static bool FilterRssItem(XElement item, XElement filterDefinition)
+        {
+            var title = item.Element("title");
+            return FilterTitle(filterDefinition, title.Value);
+        }
+
+        private static bool FilterTitle(XElement filterDefinition, string title)
+        {
+            foreach (var rule in filterDefinition.Elements("title"))
             {
                 var startswith = rule.Attribute("startswith");
-                if (startswith != null && title.Value != null && title.Value.StartsWith(startswith.Value))
+                if (startswith != null && title.StartsWith(startswith.Value))
                     return true;
 
                 var contains = rule.Attribute("contains");
-                if (contains != null && title.Value != null && title.Value.Contains(contains.Value))
+                if (contains != null && title.Contains(contains.Value))
                     return true;
             }
             return false;
