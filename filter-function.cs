@@ -80,7 +80,9 @@ namespace RssFilter.Function
 
         private static IActionResult ReturnFilteredFeed(ILogger log, XElement filterDefinition, string feedUrl)
         {
-            WebRequest feedRequest = WebRequest.Create(feedUrl);
+            var feedRequest = (HttpWebRequest) WebRequest.Create(feedUrl);
+            feedRequest.AllowAutoRedirect = true;
+
             using (WebResponse feedResponse = feedRequest.GetResponse())
             {
                 log.LogInformation(((HttpWebResponse)feedResponse).StatusDescription);
@@ -90,10 +92,14 @@ namespace RssFilter.Function
                     var feedFile = XDocument.Load(feedReader);
                     var atomFeedElement = feedFile.Element(atom + "feed");
                     var rssElement = feedFile.Element("rss");
+                    var rssChannelElement = feedFile.Element("channel");
+
+                    if (rssElement != null)
+                        rssChannelElement = rssElement.Element("channel");
+                    if (rssChannelElement != null)
+                        return ReturnFilteredRssChannel(log, filterDefinition, feedUrl, feedFile, rssChannelElement);
                     if ( atomFeedElement != null )
                         return ReturnFilteredAtomFeed(log, filterDefinition, feedUrl, feedFile, atomFeedElement);
-                    if ( rssElement != null )
-                        return ReturnFilteredRssChannel(log, filterDefinition, feedUrl, feedFile, rssElement);
                     throw new Exception("unsupported feed format");
                 }
             }
@@ -117,18 +123,16 @@ namespace RssFilter.Function
             return new OkObjectResult($"{ feedFile }");
         }
 
-        private static IActionResult ReturnFilteredRssChannel(ILogger log, XElement filterDefinition, string feedUrl, XDocument feedFile, XElement rssElement)
+        private static IActionResult ReturnFilteredRssChannel(ILogger log, XElement filterDefinition, string feedUrl, XDocument feedFile, XElement rssChannelElement)
         {
-            XElement channel = rssElement.Element("channel");
-
             {
-                XElement feedTitle = channel.Element("title");
+                XElement feedTitle = rssChannelElement.Element("title");
                 if (feedTitle == null)
                     return new ObjectResult($"feed {feedUrl} has no title element") { StatusCode = 500 };
                 log.LogInformation($"{ feedTitle.Value}");
             }
 
-            foreach (var entry in channel.Elements("item").Where(entry => FilterRssItem(entry, filterDefinition)).ToList())
+            foreach (var entry in rssChannelElement.Elements("item").Where(entry => FilterRssItem(entry, filterDefinition)).ToList())
             {
                 entry.Remove();
             }
